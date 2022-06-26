@@ -190,6 +190,8 @@ def main():
     parser.add_argument('--force', '-f', action='store_true', help='run tests even on platforms where they are disabled by default (e.g. windows).')
     parser.add_argument('--help', '-h', '-?', action='store_true', help='print help text and exit')
     parser.add_argument('--jobs', '-j', type=int, default=4, help='how many test scripts to run in parallel. Default=4.')
+    parser.add_argument('--machines', '-m', type=int, default=-1, help='how many machines to shard the tests over. must also provide individual shard index. Default=-1.')
+    parser.add_argument('--rpcgroup', '-r', type=int, default=-1, help='individual shard index. must also provide how many machines to shard the tests over. Default=-1.')
     parser.add_argument('--nozmq', action='store_true', help='do not run the zmq tests')
     args, unknown_args = parser.parse_known_args()
 
@@ -266,7 +268,16 @@ def main():
         subprocess.check_call((config["environment"]["SRCDIR"] + '/qa/rpc-tests/' + test_list[0]).split() + ['-h'])
         sys.exit(0)
 
-    run_tests(test_list, config["environment"]["SRCDIR"], config["environment"]["BUILDDIR"], config["environment"]["EXEEXT"], args.jobs, args.coverage, passon_args)
+    if((args.rpcgroup == -1 and args.mahines != -1) or (args.rpcgroup ==-1 and args.rpcmachines != -1)):
+        print("ERROR: Please use both -m and -r options when using parallel rpc_groups.")
+        sys.exit(0)
+    if( args.rpcgroup != -1 and args.machines != -1 and args.rpcgroup < args.machines ):
+        k, m = divmod(len(test_list), args.machines)
+        k = k if m == 0 else k+1
+        split_list = list(test_list[i*k:min((i+1)*k, len(test_list))] for i in range(args.machines))
+        run_tests(split_list[args.rpcgroup], config["environment"]["SRCDIR"], config["environment"]["BUILDDIR"], config["environment"]["EXEEXT"], args.jobs, args.coverage, passon_args)
+    else:
+        run_tests(test_list, config["environment"]["SRCDIR"], config["environment"]["BUILDDIR"], config["environment"]["EXEEXT"], args.jobs, args.coverage, passon_args)
 
 def run_tests(test_list, src_dir, build_dir, exeext, jobs=1, enable_coverage=False, args=[]):
     BOLD = ("","")
